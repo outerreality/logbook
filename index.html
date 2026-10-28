@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101318">
+<meta name="color-scheme" content="dark">
+<title>Logbook</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<style>
+  /* Same colors as the form (dark mode) */
+  :root { --bg: #101318; --text: #E8EBF0; --muted: #98A1B0; --line: #2B323C; --primary: #4A7BD6; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
+  body { font-family: Inter, Arial, Helvetica, sans-serif; -webkit-font-smoothing: antialiased; }
+  #form { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); opacity: 0; transition: opacity .2s; }
+  #form.ready { opacity: 1; }
+  /* What shows while the form loads, with no connection, or before setup */
+  #note { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+          gap: 18px; padding: 32px; box-sizing: border-box; text-align: center; transition: opacity .2s; }
+  #note.gone { opacity: 0; pointer-events: none; }
+  #note img { width: 72px; height: 72px; border-radius: 50%; }
+  #msg { font-size: 15px; line-height: 1.5; color: var(--muted); max-width: 300px; }
+  #msg:empty { display: none; }
+  #again { display: none; font: inherit; font-size: 15px; font-weight: 500; color: var(--text); background: #181C23;
+           border: 1px solid var(--line); border-left: 4px solid var(--primary); border-radius: 10px; padding: 10px 18px; }
+  #again.show { display: inline-block; }
+</style>
+</head>
+<body>
+<div id="note"><img src="icon-192.png" alt=""><div id="msg"></div><button id="again" type="button">Try Again</button></div>
+<script>
+  // The form itself lives in Google Apps Script ("Phone App" deployment). This page just shows it full screen.
+  // The secret key comes from the one-time setup link (Logbook > Set Up Phone App Key) and stays on this phone only.
+  var FORM_URL = 'https://script.google.com/macros/s/AKfycbz25gyxupquJB7s0GD9FtI3_QNv7g1gwvrG5H8iumHt16u7S_BCc8T066D8hd56WSCU/exec';
+  var KEY_NAME = 'logbookAppKey';
+  var note = document.getElementById('note'), msg = document.getElementById('msg'), again = document.getElementById('again');
+
+  function getKey() { try { return localStorage.getItem(KEY_NAME) || ''; } catch (e) { return ''; } }
+  // Setup link: https://outerreality.github.io/logbook/#k=KEY  (saved, then removed from the address)
+  function takeKey() {
+    var m = /[#&]k=([0-9a-f]{20,})/i.exec(location.hash);
+    if (!m) return false;
+    try { localStorage.setItem(KEY_NAME, m[1]); } catch (e) {}
+    history.replaceState(null, '', location.pathname);
+    return true;
+  }
+  takeKey();
+
+  function show(text, retry) { msg.textContent = text; again.classList.toggle('show', !!retry); note.classList.remove('gone'); }
+
+  function start() {
+    var key = getKey();
+    if (!key) { show('To Finish Setup, Open The Link From Logbook > Set Up Phone App Key On This Phone.'); return; }
+    if (!navigator.onLine) { show('No Connection. The Logbook Opens When You\u2019re Back Online.', true); return; }
+    show('');
+    var old = document.getElementById('form');
+    if (old) old.remove();
+    var f = document.createElement('iframe');
+    f.id = 'form'; f.title = 'Logbook';
+    f.src = FORM_URL + '?k=' + encodeURIComponent(key);
+    f.onload = function () {
+      f.classList.add('ready');
+      setTimeout(function () { note.classList.add('gone'); }, 200);
+    };
+    document.body.appendChild(f);
+  }
+  again.addEventListener('click', start);
+  window.addEventListener('hashchange', function () { if (takeKey()) start(); });
+  window.addEventListener('online', function () { if (!document.getElementById('form')) start(); });
+  start();
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+</script>
+</body>
+</html>
